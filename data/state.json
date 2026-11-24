@@ -9,8 +9,9 @@
     "56719998": "ok",
     "56846200": "ok"
   },
-  "aviso_dado_velho": false,
+  "aviso_dado_velho": true,
   "relatorio_dia": "2026-11-24",
-  "ultima_execucao": "2026-11-24T09:53:40.128284",
-  "ultima_previsao": "2026-11-24T09:00:00"
+  "ultima_execucao": "2026-11-24T10:18:13.138066",
+  "ultima_previsao": "2026-11-24T09:00:00",
+  "ultima_completa": "2026-11-24T10:18:13.138066"
 }
