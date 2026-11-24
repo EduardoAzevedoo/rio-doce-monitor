@@ -456,7 +456,15 @@ def eventos(a, d, st):
     # dado parado
     velho = (a.get("idade_h") or 99) > C.DADO_VELHO_H
     if velho and not st.get("aviso_dado_velho"):
-        ev.append("⚠️ A telemetria de Valadares parou de atualizar (> 3h). Acompanhe pelo portal do SGB e a Defesa Civil.")
+        ana_fora = not a["gv"] and all(m["r"] is None for m in a["montante"])
+        if ana_fora:
+            ev.append("⚠️ <b>O serviço de telemetria da ANA está fora do ar</b> (nenhum posto responde). Sem dados, o "
+                      "monitor não consegue avisar. Enquanto isso: Defesa Civil (SMS 40199) e portal do SGB "
+                      "(sace.sgb.gov.br/doce). Aviso de novo quando voltar.")
+        else:
+            ev.append("⚠️ A telemetria de Valadares parou de atualizar (> 3h). Acompanhe pelo portal do SGB e a Defesa Civil.")
+    if not velho and st.get("aviso_dado_velho"):
+        ev.append("✅ Telemetria de Valadares voltou a atualizar.")
     st["aviso_dado_velho"] = velho
     # boletim novo do SGB
     sgb = d.get("sgb")
