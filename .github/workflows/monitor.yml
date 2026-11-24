@@ -4,6 +4,10 @@ on:
   schedule:
     # De hora em hora (minuto 23 para fugir do pico de :00 do GitHub). Relatório diário sai na 1ª rodada após 7h.
     - cron: "23 * * * *"
+  push:
+    # roda também quando o código muda (teste em produção); commits de dados não disparam
+    branches: [main]
+    paths: ["monitor/**", "modelos/**", "requirements.txt", ".github/workflows/**"]
   workflow_dispatch:
     inputs:
       relatorio:
@@ -41,6 +45,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           RUA_CM: ${{ vars.RUA_CM }}
         run: |
+          python -m unittest -q
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.relatorio }}" = "true" ]; then
             python -m monitor.run --relatorio
           else
