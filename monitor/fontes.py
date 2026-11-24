@@ -9,9 +9,16 @@ import uuid
 UA = {"User-Agent": "rio-doce-monitor/1.0 (uso pessoal, alerta de cheia)"}
 
 
-def _get_json(url, timeout=60):
+def _get_json(url, timeout=60, tentativas=4):
+    import time
     req = urllib.request.Request(url, headers=UA)
-    return json.loads(urllib.request.urlopen(req, timeout=timeout).read())
+    for i in range(tentativas):
+        try:
+            return json.loads(urllib.request.urlopen(req, timeout=timeout).read())
+        except Exception:
+            if i == tentativas - 1:
+                raise
+            time.sleep(10 * (i + 1))
 
 
 def chuva_prevista(pontos, dias=7):

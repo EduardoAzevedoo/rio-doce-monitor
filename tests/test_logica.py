@@ -37,5 +37,23 @@ class TestLogica(unittest.TestCase):
         self.assertTrue(any("Subida rápida" in e for e in evs))
 
 
+class TestPrevisao(unittest.TestCase):
+    def test_modelo_carrega_e_preve(self):
+        import pandas as pd
+        from monitor import previsao
+        t0 = dt.datetime(2026, 1, 20, 12)
+        gv = [{"t": t0 - dt.timedelta(minutes=15 * i), "nivel_cm": 250.0, "vazao_m3s": 1000.0, "chuva_mm": None}
+              for i in range(0, 4 * 72)]
+        idx = pd.date_range(t0 - dt.timedelta(hours=72), t0 + dt.timedelta(hours=144), freq="1h")
+        chuva = pd.DataFrame({f"r_{k}": 0.0 for k in ["piranga", "piracicaba", "santoantonio", "docemedio", "gv"]},
+                             index=idx)
+        r = previsao.prever(gv, [], chuva=chuva)
+        self.assertEqual(len(r["prev"]), 8)
+        for p in r["prev"]:
+            self.assertLessEqual(p["baixo"], p["p50"])
+            self.assertLessEqual(p["p50"], p["alto"])
+            self.assertLess(abs(p["p50"] - 250), 60)   # sem chuva e rio estável: não inventa cheia
+
+
 if __name__ == "__main__":
     unittest.main()

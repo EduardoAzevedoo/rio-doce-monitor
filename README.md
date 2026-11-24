@@ -39,6 +39,34 @@ Agente que checa o Rio Doce **de hora em hora** e manda pelo Telegram:
 
 **Backtest dos alertas** (replay hora a hora com dados reais): 1º aviso antes de passar de 360 cm — jan/2020: 38h · jan/2022: 41h · jan/2023: 114h · jan/2026: 42h.
 
+## Previsão 6h–120h (fase 3)
+
+Modelo de *gradient boosting* quantílico (P10/P50/P90), um por horizonte (6, 12, 24, 36, 48, 72, 96, 120h), treinado com a telemetria ANA horária de 7 temporadas chuvosas (out–abr, 2019/20 a 2025/26) e com chuva por sub-bacia (Piranga, Piracicaba, Santo Antônio, Doce médio). Entradas: nível e tendência em Valadares, vazão e tendência em Nova Era, Ponte Nova, Mário de Carvalho, Naque Velho e Baguari, chuva das últimas 24/72h e **chuva prevista** para os próximos 5 dias. As faixas foram recalibradas pelos erros reais fora da amostra (CQR), mirando 80% de cobertura (85% com água alta).
+
+### Validação
+
+**1. Temporada de fora (leave-one-season-out, chuva observada)** — cada temporada prevista por um modelo que não a viu. Erro médio absoluto (cm), com água alta (≥300 cm):
+
+| Horizonte | 6h | 12h | 24h | 36h | 48h | 72h | 96h | 120h |
+|---|---|---|---|---|---|---|---|---|
+| Modelo | 7 | 11 | 17 | 22 | 26 | 35 | 38 | 40 |
+| Persistência (rio parado) | 11 | 20 | 36 | 51 | 64 | 82 | 95 | 103 |
+
+Picos previstos sem o modelo ter visto a cheia: jan/2022 (604 cm) — 72h antes, com o rio em 308, previu 492 [359–547]; jan/2023 (512) — 48h antes previu 521; jan/2026 (367) — 48h antes, rio em 263, previu 352 [304–383]. **Falha conhecida:** subestima a cheia mais extrema da série (jan/2020, 583 cm: 24h antes previu 504).
+
+**2. Teste honesto (treino até abr/2024; teste 2024/25 e 2025/26 com a chuva que estava PREVISTA na época)** — água alta: erro de 15 cm em 24h e 31 cm em 72h (persistência: 28 e 59). Faixa calibrada cobriu 70–87% dos casos. Cheia de jan/2026: o modelo indicou possível água na rua em 18/01, com o rio a ~150 cm, 6 dias antes de a água chegar (24/01). Dez/2024: indicou possível água na rua; o rio chegou a 340 cm (1 cm abaixo).
+
+### Como os alertas usam a previsão
+- ⚠️ **Possível água na sua rua**: faixa pessimista ≥ 341 cm em até 72h (1x por dia). Alarme falso frequente — é um "fique atento".
+- 🚨 **Água provável na sua rua**: previsão central ≥ 341 cm em até 72h (repete se o pico previsto subir ≥15 cm, ou a cada 12h).
+- 96h e 120h aparecem só no boletim, marcados como baixa confiança.
+
+### Limites
+- Poucas cheias grandes no histórico (3 acima de 500 cm): previsões acima de ~520 cm tendem a subestimar.
+- Treino usou chuva de reanálise (ERA5); em operação a chuva passada vem da análise do modelo de previsão — diferença pequena, não medida.
+- Manobras de usinas não programadas não são previstas; aparecem em ~2–3h via posto de Baguari.
+- Retreinar ao fim de cada temporada: `treino/` (baixar → base → cv → teste_honesto → treinar).
+
 ## Instalação (uma vez, ~10 min)
 
 1. **Bot do Telegram:** no Telegram, fale com `@BotFather` → `/newbot` → guarde o token.
@@ -55,7 +83,7 @@ Agente que checa o Rio Doce **de hora em hora** e manda pelo Telegram:
 python -m monitor.run --dry-run --relatorio   # imprime o relatório, não envia nada
 ```
 
-Sem dependências externas (só biblioteca padrão do Python 3.10+).
+Dependências em `requirements.txt` (numpy, scipy, pandas, scikit-learn — versões fixadas para carregar o modelo).
 
 ## Limites (leia)
 

@@ -152,6 +152,18 @@ def enviar_telegram(texto, dry):
 
 # ------------------------------------------------------------------ coleta
 
+_NOMES_SUB = {"r_piranga": "Piranga (cabeceira)", "r_piracicaba": "Piracicaba", "r_santoantonio": "Santo Antônio",
+              "r_docemedio": "Doce médio (Ipatinga–Belo Oriente)", "r_gv": "Valadares (local)"}
+
+
+def _chuva_diaria(ch, t):
+    """Converte a chuva horária (mm) em totais diários a partir de hoje, no formato do relatório."""
+    d = ch[ch.index.date >= t.date()].resample("1D").sum(min_count=1)
+    datas = [x.date().isoformat() for x in d.index][:7]
+    return [{"nome": _NOMES_SUB[c], "datas": datas, "mm": [None if v != v else float(v) for v in d[c].values[:7]]}
+            for c in ch.columns]
+
+
 def coletar():
     t = agora()
     ini, fim = (t - dt.timedelta(days=3)).date(), t.date()
@@ -168,14 +180,28 @@ def coletar():
         except Exception as e:
             falhas.append(f"ANA {p['nome']}: {e}")
             dados["montante"].append((p, []))
-    for nome, fn in [("chuva", lambda: fontes.chuva_prevista(C.SUBBACIAS_CHUVA)),
-                     ("glofas", lambda: fontes.glofas(C.GV["lat"], C.GV["lon"])),
+    from . import previsao
+    chuva_h = None
+    try:
+        chuva_h = previsao.chuva_horaria()
+        dados["chuva"] = _chuva_diaria(chuva_h, t)
+    except Exception as e:
+        falhas.append(f"chuva: {type(e).__name__}: {e}")
+        dados["chuva"] = "ERRO"
+    for nome, fn in [("glofas", lambda: fontes.glofas(C.GV["lat"], C.GV["lon"])),
                      ("sgb", fontes.sgb_ultimo_boletim)]:
         try:
             dados[nome] = fn()
         except Exception as e:
             falhas.append(f"{nome}: {type(e).__name__}: {e}")
             dados[nome] = "ERRO"
+    try:
+        if chuva_h is None:
+            raise RuntimeError("sem chuva prevista")
+        dados["previsao"] = previsao.prever(dados["gv"], dados["montante"], chuva=chuva_h)
+    except Exception as e:
+        falhas.append(f"previsão: {type(e).__name__}: {e}")
+        dados["previsao"] = None
     dados["falhas"] = falhas
     return dados
 
@@ -234,6 +260,7 @@ def analisar(d):
         except (ValueError, KeyError, TypeError):
             pass
 
+    a["previsao"] = d.get("previsao")
     ch = d.get("chuva")
     if isinstance(ch, list) and ch:
         datas = ch[0]["datas"]
@@ -293,6 +320,15 @@ def bloco_montante(a, so_relevantes=False):
     return "\n".join(linhas)
 
 
+def bloco_glofas(a):
+    cen = a.get("cenario")
+    if not cen:
+        return ""
+    pior = max(c["max"] for c in cen)
+    return (f"<i>Referência externa GloFAS (não validada): pico central ~{max(c['central'] for c in cen):.0f} cm, "
+            f"pessimista ~{pior:.0f} cm em 5 dias.</i>")
+
+
 def bloco_cenario(a):
     cen = a.get("cenario")
     if not cen:
@@ -304,6 +340,25 @@ def bloco_cenario(a):
         if C.RUA_CM and c["max"] >= C.RUA_CM:
             extra = f" → rua: até ~{lamina_rua(c['max']):.0f} cm no pessimista"
         s.append(f"• {d}: ~{c['central']:.0f} cm (pessimista {c['max']:.0f}){extra}")
+    return "\n".join(s)
+
+
+def bloco_previsao(a):
+    pv = a.get("previsao")
+    if not pv:
+        return "<b>Previsão</b>: indisponível nesta rodada (ver fontes com falha)."
+    s = [f"<b>Previsão do nível em Valadares</b> (modelo validado; faixa = 80% de chance):"]
+    for p in pv["prev"]:
+        if p["H"] not in (12, 24, 48, 72, 96, 120):
+            continue
+        v = p["valido"]
+        conf = "" if p["H"] <= 72 else " <i>(baixa confiança)</i>"
+        rua = ""
+        if C.RUA_CM and p["alto"] >= C.RUA_CM:
+            rua = f" → rua: até ~{lamina_rua(p['alto']):.0f} cm" if p["p50"] < C.RUA_CM else \
+                  f" → <b>rua: ~{lamina_rua(p['p50']):.0f} cm</b>"
+        s.append(f"• +{p['H']}h ({DIAS[v.weekday()]} {v:%d/%m %Hh}): <b>{p['p50']:.0f} cm</b> "
+                 f"[{p['baixo']:.0f}–{p['alto']:.0f}]{conf}{rua}")
     return "\n".join(s)
 
 
@@ -321,7 +376,8 @@ def bloco_chuva(a):
 
 def relatorio(a, d):
     partes = [f"<b>🌊 Boletim diário — Rio Doce / Esplanadinha</b>", linha_gv(a), "",
-              "<b>Rio acima</b>:", bloco_montante(a), "", bloco_chuva(a), "", bloco_cenario(a)]
+              bloco_previsao(a), "", "<b>Rio acima</b>:", bloco_montante(a), "", bloco_chuva(a), "",
+              bloco_glofas(a)]
     sgb = d.get("sgb")
     if sgb == "ERRO":
         partes.append("\nSGB: portal indisponível nesta rodada.")
@@ -379,16 +435,30 @@ def eventos(a, d, st):
     if isinstance(sgb, dict) and sgb["id"] != st.get("sgb_id"):
         ev.append(f"📄 Novo boletim do SGB/SAH Doce: {html.escape(sgb['nome'])}\nhttps://sace.sgb.gov.br/doce")
         st["sgb_id"] = sgb["id"]
-    # cenário cruzando inundação (1x por dia)
-    cen = a.get("cenario") or []
-    pior = max((c["central"] for c in cen), default=0)
+    # previsão do modelo cruzando o nível da rua (só até 72h)
     hoje = a["t"].date().isoformat()
-    lim = min(C.GV["inundacao"], C.RUA_CM or 10_000)
-    if pior >= lim and st.get("cenario_alerta_dia") != hoje:
-        ev.append(f"🔮 Cenário central dos próximos 5 dias chega a ~{pior:.0f} cm na régua "
-                  f"(água estimada ~{lamina_rua(pior):.0f} cm na sua rua). "
-                  "Indicativo — confirme com SGB e Defesa Civil.")
-        st["cenario_alerta_dia"] = hoje
+    pv = a.get("previsao")
+    if pv and C.RUA_CM:
+        curto = [p for p in pv["prev"] if p["H"] <= 72]
+        prov = [p for p in curto if p["p50"] >= C.RUA_CM]
+        poss = [p for p in curto if p["alto"] >= C.RUA_CM]
+        agora_iso = a["t"].isoformat()
+        if prov:
+            p = prov[0]
+            pico = max(curto, key=lambda x: x["p50"])
+            ult = st.get("prev_provavel")
+            if (not ult or (a["t"] - dt.datetime.fromisoformat(ult["t"])).total_seconds() > 12 * 3600
+                    or pico["p50"] >= ult["pico"] + 15):
+                ev.append(f"🚨 <b>ÁGUA PROVÁVEL NA SUA RUA</b> a partir de ~{fmt_t(p['valido'])} "
+                          f"(+{p['H']}h). Pico previsto ~{pico['p50']:.0f} cm [{pico['baixo']:.0f}–{pico['alto']:.0f}] "
+                          f"→ ~{lamina_rua(pico['p50']):.0f} cm de água na rua (até ~{lamina_rua(pico['alto']):.0f}).")
+                st["prev_provavel"] = {"t": agora_iso, "pico": pico["p50"]}
+        elif poss and st.get("prev_possivel_dia") != hoje:
+            p = poss[0]
+            ev.append(f"⚠️ <b>Possível água na sua rua</b> em até {max(x['H'] for x in poss)}h: o cenário pessimista "
+                      f"passa de {C.RUA_CM} cm a partir de ~{fmt_t(p['valido'])} (central {p['p50']:.0f} cm). "
+                      "Acompanhe os próximos boletins.")
+            st["prev_possivel_dia"] = hoje
     return ev
 
 
