@@ -37,6 +37,31 @@ class TestLogica(unittest.TestCase):
         self.assertTrue(any("Subida rápida" in e for e in evs))
 
 
+class TestEntrega(unittest.TestCase):
+    def test_falha_do_telegram_nao_perde_alerta(self):
+        import json, os, tempfile
+        from monitor import config as C
+        tmp = tempfile.mkdtemp()
+        C.STATE_PATH, C.LOG_CSV = os.path.join(tmp, "state.json"), os.path.join(tmp, "log.csv")
+        json.dump({"faixa": 1, "relatorio_dia": "2026-01-20"}, open(C.STATE_PATH, "w"))
+        t0 = dt.datetime(2026, 1, 20, 12)
+        run.agora = lambda: t0
+        serie = [{"t": t0 - dt.timedelta(hours=h), "nivel_cm": 330.0 - h, "vazao_m3s": 2000.0, "chuva_mm": None}
+                 for h in reversed(range(0, 30))]
+        run.coletar = lambda leve=False: {"gv": serie, "montante": [], "chuva": None, "glofas": None,
+                                          "sgb": None, "previsao": None, "falhas": []}
+        enviados = []
+        def falha(m, dry):
+            raise RuntimeError("Telegram fora do ar")
+        run.enviar_telegram = falha
+        self.assertEqual(run.main(["--leve"]), 2)
+        self.assertEqual(json.loads(open(C.STATE_PATH).read())["faixa"], 1)     # alerta NÃO marcado como enviado
+        run.enviar_telegram = lambda m, dry: enviados.append(m)
+        self.assertEqual(run.main(["--leve"]), 0)
+        self.assertTrue(any("ALERTA" in m for m in enviados))           # reenviado na rodada seguinte
+        self.assertEqual(json.loads(open(C.STATE_PATH).read())["faixa"], 2)
+
+
 class TestPrevisao(unittest.TestCase):
     def test_modelo_carrega_e_preve(self):
         import pandas as pd

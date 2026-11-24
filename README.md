@@ -1,6 +1,6 @@
 # Monitor do Rio Doce — Governador Valadares (Esplanadinha)
 
-Agente que checa o Rio Doce **de hora em hora** e manda pelo Telegram:
+Agente que checa o Rio Doce **de hora em hora** (rodada leve; completa com previsão a cada 3h, ou toda hora com rio ≥ 280 cm) e manda pelo Telegram:
 
 - **Relatório diário (~7h):** nível em Valadares, tendência, postos rio acima com tempo de chegada, chuva prevista na bacia (7 dias) e cenário indicativo de 5 dias.
 - **Alertas imediatos:** mudança de faixa (com histerese de 10 cm), subida rápida (≥ 5 cm/h em 3h, a partir de 250 cm), posto a montante passando da cota SGB, boletim novo do SGB, telemetria parada, cenário de 5 dias acima da inundação.
@@ -37,7 +37,7 @@ Agente que checa o Rio Doce **de hora em hora** e manda pelo Telegram:
 | 14/01/2025 | 376 |
 | 25/01/2026 | 367 |
 
-**Backtest dos alertas** (replay hora a hora com dados reais): 1º aviso antes de passar de 360 cm — jan/2020: 38h · jan/2022: 41h · jan/2023: 114h · jan/2026: 42h.
+**Backtest dos alertas de nível** (replay hora a hora com dados reais): 1º aviso antes de passar de 360 cm — jan/2020: 38h · jan/2022: 41h · jan/2023: 114h · jan/2026: 42h.
 
 ## Previsão 6h–120h (fase 3)
 
@@ -56,10 +56,21 @@ Picos previstos sem o modelo ter visto a cheia: jan/2022 (604 cm) — 72h antes,
 
 **2. Teste honesto (treino até abr/2024; teste 2024/25 e 2025/26 com a chuva que estava PREVISTA na época)** — água alta: erro de 15 cm em 24h e 31 cm em 72h (persistência: 28 e 59). Faixa calibrada cobriu 70–87% dos casos. Cheia de jan/2026: o modelo indicou possível água na rua em 18/01, com o rio a ~150 cm, 6 dias antes de a água chegar (24/01). Dez/2024: indicou possível água na rua; o rio chegou a 340 cm (1 cm abaixo).
 
-### Como os alertas usam a previsão
-- ⚠️ **Possível água na sua rua**: faixa pessimista ≥ 341 cm em até 72h (1x por dia). Alarme falso frequente — é um "fique atento".
-- 🚨 **Água provável na sua rua**: previsão central ≥ 341 cm em até 72h (repete se o pico previsto subir ≥15 cm, ou a cada 12h).
+### Como os alertas usam a previsão (máquina de estados)
+- ⚠️ **Possível água na sua rua**: faixa pessimista ≥ 341 cm em até 72h.
+- 🚨 **Água provável na sua rua**: previsão central ≥ 341 cm em até 72h.
+- Só avisa quando a situação **piora**: sobe de estado, pico previsto +15 cm, ou chegada da água a menos de 24h.
+- ✅ **Risco diminuiu**: só depois de 24h seguidas com a previsão pessimista abaixo de 326 cm (evita "liberar" numa oscilação da previsão de chuva).
 - 96h e 120h aparecem só no boletim, marcados como baixa confiança.
+
+**Replay das duas últimas temporadas** (modelo treinado até 2024, chuva prevista arquivada, lógica de alerta completa a cada 3h):
+
+| Temporada | Água na rua (real) | 1º "provável" | Avisos de rua na temporada | Sem água na rua em 96h |
+|---|---|---|---|---|
+| 2024/25 | 13/01 (376 cm) | 131h antes (rio em 303) | 13 | dez/24 (304 cm); 28–31/12 chegou a 340 (1 cm abaixo) |
+| 2025/26 | 24/01 (367 cm) | 77h antes (rio em 158) | 11 | 05/01 (274), 24/02 (298), 13/03 (284) |
+
+Versão anterior da regra (repetição a cada 12h) gerava 37 e 20 avisos e um falso "risco diminuiu" em 22/01/2026, dois dias antes de a água chegar — corrigido.
 
 ### Limites
 - Poucas cheias grandes no histórico (3 acima de 500 cm): previsões acima de ~520 cm tendem a subestimar.

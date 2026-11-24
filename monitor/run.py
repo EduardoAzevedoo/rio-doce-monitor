@@ -7,6 +7,7 @@ Uso:
 """
 from __future__ import annotations
 import argparse
+import copy
 import csv
 import datetime as dt
 import html
@@ -182,7 +183,7 @@ def _chuva_diaria(ch, t):
             for c in ch.columns]
 
 
-def coletar():
+def coletar(leve=False):
     t = agora()
     ini, fim = (t - dt.timedelta(days=3)).date(), t.date()
     falhas, dados = [], {}
@@ -198,8 +199,17 @@ def coletar():
         except Exception as e:
             falhas.append(f"ANA {p['nome']}: {e}")
             dados["montante"].append((p, []))
-    from . import previsao
     chuva_h = None
+    if leve:
+        dados.update({"chuva": None, "glofas": None, "previsao": None})
+        try:
+            dados["sgb"] = fontes.sgb_ultimo_boletim()
+        except Exception as e:
+            falhas.append(f"sgb: {type(e).__name__}: {e}")
+            dados["sgb"] = "ERRO"
+        dados["falhas"] = falhas
+        return dados
+    from . import previsao
     try:
         chuva_h = previsao.chuva_horaria()
         dados["chuva"] = _chuva_diaria(chuva_h, t)
@@ -453,71 +463,104 @@ def eventos(a, d, st):
     if isinstance(sgb, dict) and sgb["id"] != st.get("sgb_id"):
         ev.append(f"📄 Novo boletim do SGB/SAH Doce: {html.escape(sgb['nome'])}\nhttps://sace.sgb.gov.br/doce")
         st["sgb_id"] = sgb["id"]
-    # previsão do modelo cruzando o nível da rua (só até 72h)
-    hoje = a["t"].date().isoformat()
+    # previsão do modelo para a rua (só até 72h) — máquina de estados para evitar alerta repetido:
+    # nenhum → possível → provável; só avisa quando PIORA (sobe de estado, pico +15 cm, ou chegada < 24h)
+    # e uma vez quando o risco passa.
     pv = a.get("previsao")
-    if pv and C.RUA_CM:
-        curto = [p for p in pv["prev"] if p["H"] <= 72]
+    curto = [p for p in pv["prev"] if p["H"] <= 72] if pv else []
+    if curto and C.RUA_CM:
         prov = [p for p in curto if p["p50"] >= C.RUA_CM]
         poss = [p for p in curto if p["alto"] >= C.RUA_CM]
-        agora_iso = a["t"].isoformat()
-        if prov:
-            p = prov[0]
-            pico = max(curto, key=lambda x: x["p50"])
-            ult = st.get("prev_provavel")
-            if (not ult or (a["t"] - dt.datetime.fromisoformat(ult["t"])).total_seconds() > 12 * 3600
-                    or pico["p50"] >= ult["pico"] + 15):
-                ev.append(f"🚨 <b>ÁGUA PROVÁVEL NA SUA RUA</b> a partir de ~{fmt_t(p['valido'])} "
-                          f"(+{p['H']}h). Pico previsto ~{pico['p50']:.0f} cm [{pico['baixo']:.0f}–{pico['alto']:.0f}] "
+        pico = max(curto, key=lambda x: x["p50"])
+        r = st.get("rua", {"estado": 0, "pico": 0, "iminente": False})
+        estado = 2 if prov else 1 if poss else 0
+        iminente = bool(prov) and prov[0]["H"] <= 24
+        if estado > 0 or pico["alto"] >= C.RUA_CM - 15:
+            r.pop("baixo_desde", None)
+        if estado > r["estado"] or (estado == 2 and (pico["p50"] >= r["pico"] + 15 or (iminente and not r["iminente"]))):
+            if estado == 2:
+                p = prov[0]
+                ev.append(f"🚨 <b>ÁGUA PROVÁVEL NA SUA RUA</b> a partir de ~{fmt_t(p['valido'])} (+{p['H']}h). "
+                          f"Pico previsto ~{pico['p50']:.0f} cm [{pico['baixo']:.0f}–{pico['alto']:.0f}] "
                           f"→ ~{lamina_rua(pico['p50']):.0f} cm de água na rua (até ~{lamina_rua(pico['alto']):.0f}).")
-                st["prev_provavel"] = {"t": agora_iso, "pico": pico["p50"]}
-        elif poss and st.get("prev_possivel_dia") != hoje:
-            p = poss[0]
-            ev.append(f"⚠️ <b>Possível água na sua rua</b> em até {max(x['H'] for x in poss)}h: o cenário pessimista "
-                      f"passa de {C.RUA_CM} cm a partir de ~{fmt_t(p['valido'])} (central {p['p50']:.0f} cm). "
-                      "Acompanhe os próximos boletins.")
-            st["prev_possivel_dia"] = hoje
+            else:
+                p = poss[0]
+                ev.append(f"⚠️ <b>Possível água na sua rua</b> nos próximos 3 dias: o cenário pessimista passa de "
+                          f"{C.RUA_CM} cm a partir de ~{fmt_t(p['valido'])} (previsão central {pico['p50']:.0f} cm). "
+                          "Fique atento aos próximos avisos.")
+            r = {"estado": estado, "pico": pico["p50"], "iminente": iminente}
+        elif estado == 0 and r["estado"] > 0 and pico["alto"] < C.RUA_CM - 15:
+            # só libera depois de 24h SEGUIDAS com risco baixo (a previsão de chuva oscila entre rodadas)
+            desde = r.get("baixo_desde") or a["t"].isoformat()
+            r["baixo_desde"] = desde
+            if (a["t"] - dt.datetime.fromisoformat(desde)).total_seconds() >= 24 * 3600:
+                ev.append(f"✅ Risco de água na sua rua diminuiu: há 24h a previsão máxima para 72h fica abaixo de "
+                          f"{C.RUA_CM - 15} cm (agora ~{pico['p50']:.0f}, pessimista {pico['alto']:.0f}).")
+                r = {"estado": 0, "pico": 0, "iminente": False}
+        st["rua"] = r  # se o risco recua sem zerar, mantém o estado (não re-alerta na oscilação)
     return ev
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--relatorio", action="store_true")
+    ap.add_argument("--relatorio", action="store_true", help="força o relatório completo")
+    ap.add_argument("--leve", action="store_true", help="rodada leve: sem previsão/chuva (só biblioteca padrão)")
+    ap.add_argument("--teste-alerta", action="store_true", help="envia um alerta de teste e sai")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
+    if args.teste_alerta:
+        enviar_telegram("🚨 <b>TESTE DE ALERTA — Rio Doce</b>\nSe este aviso tocou com o celular no silencioso/"
+                        "não perturbe, a configuração está certa. Nenhuma ação necessária.", args.dry_run)
+        return 0
     st = carregar_estado()
     primeira_vez = not st
     try:
-        d = coletar()
+        d = coletar(leve=args.leve)
         a = analisar(d)
+        # registros (independem de o Telegram funcionar)
         if not args.dry_run:
-            n = anexar_log(d["gv"], st.get("ultimo_log"))
+            anexar_log(d["gv"], st.get("ultimo_log"))
             if a["gv"]:
                 st["ultimo_log"] = max(r["t"] for r in d["gv"] if r["nivel_cm"] is not None).isoformat()
-        pv = d.get("previsao")
-        repetida = pv is not None and pv["emitida"].isoformat() == st.get("ultima_previsao")
-        if not args.dry_run and not repetida:
-            registrar_previsao(pv, d["falhas"])
-            if pv:
-                st["ultima_previsao"] = pv["emitida"].isoformat()
-        evs = eventos(a, d, st)
+            if not args.leve:
+                pv = d.get("previsao")
+                if not (pv is not None and pv["emitida"].isoformat() == st.get("ultima_previsao")):
+                    registrar_previsao(pv, d["falhas"])
+                    if pv:
+                        st["ultima_previsao"] = pv["emitida"].isoformat()
+        # alertas: calculados numa CÓPIA do estado; só vira definitivo se o envio der certo
+        st_novo = copy.deepcopy(st)
+        evs = eventos(a, d, st_novo)
         hoje = a["t"].date().isoformat()
-        mandar_rel = args.relatorio or primeira_vez or (
-            a["t"].hour >= C.HORA_RELATORIO and st.get("relatorio_dia") != hoje)
+        mandar_rel = not args.leve and (args.relatorio or primeira_vez or (
+            a["t"].hour >= C.HORA_RELATORIO and st.get("relatorio_dia") != hoje))
         msgs = []
         if mandar_rel:
             msgs.append(relatorio(a, d))
-            st["relatorio_dia"] = hoje
+            st_novo["relatorio_dia"] = hoje
             if evs:
                 msgs.append("<b>Destaques:</b>\n" + "\n".join(evs))
         elif evs:
             msgs.append("<b>🚨 Rio Doce — atualização</b>\n" + linha_gv(a) + "\n\n" + "\n\n".join(evs)
                         + ("\n\n" + bloco_montante(a, so_relevantes=True) if any("🌊" in e for e in evs) else ""))
-        for m in msgs:
-            enviar_telegram(m, args.dry_run)
+        try:
+            for m in msgs:
+                enviar_telegram(m, args.dry_run)
+        except Exception as e:
+            # NÃO grava st_novo: na próxima rodada os mesmos alertas serão recalculados e reenviados
+            st["falha_envio"] = st.get("falha_envio", 0) + 1
+            st["ultima_execucao"] = a["t"].isoformat()
+            print(f"Falha ao enviar pelo Telegram ({st['falha_envio']}x): {e}", file=sys.stderr)
+            if not args.dry_run:
+                salvar_estado(st)
+            return 2
+        st = st_novo
+        st.pop("falha_envio", None)
         if not msgs:
             print(f"[{a['t']:%d/%m %H:%M}] sem novidades — {linha_gv(a).splitlines()[0]}")
         st["ultima_execucao"] = a["t"].isoformat()
+        if not args.leve:
+            st["ultima_completa"] = a["t"].isoformat()
         st.pop("falha_consecutiva", None)
     except Exception:
         tb = traceback.format_exc()
@@ -525,8 +568,11 @@ def main(argv=None):
         n = st.get("falha_consecutiva", 0) + 1
         st["falha_consecutiva"] = n
         if n in (2, 6, 24):
-            enviar_telegram(f"⚠️ Monitor do Rio Doce falhou {n}x seguidas. Último erro:\n<code>"
-                            f"{html.escape(tb[-600:])}</code>", args.dry_run)
+            try:
+                enviar_telegram(f"⚠️ Monitor do Rio Doce falhou {n}x seguidas. Último erro:\n<code>"
+                                f"{html.escape(tb[-600:])}</code>", args.dry_run)
+            except Exception:
+                pass
         if not args.dry_run:
             salvar_estado(st)
         return 1
