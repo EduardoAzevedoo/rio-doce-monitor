@@ -138,6 +138,24 @@ def anexar_log(serie, desde):
     return n
 
 
+def registrar_previsao(pv, falhas):
+    """Histórico das previsões emitidas (para verificar o modelo ao longo da temporada)."""
+    caminho = os.path.join(os.path.dirname(C.LOG_CSV), "previsoes.csv")
+    novo = not os.path.exists(caminho)
+    with open(caminho, "a", newline="") as f:
+        w = csv.writer(f)
+        if novo:
+            w.writerow(["emitida", "nivel_atual_cm", "horizonte_h", "valido_para", "p50_cm", "baixo_cm", "alto_cm", "status"])
+        if not pv:
+            w.writerow([agora().isoformat(timespec="minutes"), "", "", "", "", "", "",
+                        "indisponivel: " + "; ".join(x for x in falhas if "previs" in x or "chuva" in x)[:200]])
+            return
+        for p in pv["prev"]:
+            w.writerow([pv["emitida"].isoformat(timespec="minutes"), round(pv["h0"], 1), p["H"],
+                        p["valido"].isoformat(timespec="minutes"), round(p["p50"], 1),
+                        round(p["baixo"], 1), round(p["alto"], 1), "ok"])
+
+
 def enviar_telegram(texto, dry):
     token, chat = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
     if dry or not token or not chat:
@@ -476,6 +494,12 @@ def main(argv=None):
             n = anexar_log(d["gv"], st.get("ultimo_log"))
             if a["gv"]:
                 st["ultimo_log"] = max(r["t"] for r in d["gv"] if r["nivel_cm"] is not None).isoformat()
+        pv = d.get("previsao")
+        repetida = pv is not None and pv["emitida"].isoformat() == st.get("ultima_previsao")
+        if not args.dry_run and not repetida:
+            registrar_previsao(pv, d["falhas"])
+            if pv:
+                st["ultima_previsao"] = pv["emitida"].isoformat()
         evs = eventos(a, d, st)
         hoje = a["t"].date().isoformat()
         mandar_rel = args.relatorio or primeira_vez or (
