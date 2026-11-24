@@ -26,7 +26,7 @@ NIVEIS = [
     (1, "🟡", "Atenção"),
     (2, "🟠", "ALERTA (≥ 320 cm)"),
     (3, "🔴", "INUNDAÇÃO (≥ 360 cm)"),
-    (4, "🚨", "ÁGUA NA SUA RUA"),
+    (4, "🚨", "ÁGUA CHEGANDO NA SUA RUA"),
 ]
 
 
@@ -63,6 +63,25 @@ def faixa_com_histerese(cm, anterior):
     while anterior > f and cm >= limite_inferior(anterior) - HISTERESE_CM:
         return anterior
     return f
+
+
+def lamina_rua(cm):
+    """Lâmina d'água estimada na rua (cm) para uma cota em GV; 0 se não chega."""
+    if not C.RUA_CM or cm is None:
+        return 0
+    return max(0.0, C.RUA_FATOR * (cm - C.RUA_CM))
+
+
+def texto_rua(cm):
+    if not C.RUA_CM or cm is None:
+        return ""
+    if cm < C.RUA_CM - C.RUA_AVISO_ANTES_CM:
+        return f"Sua rua: sem risco agora (a água começa a chegar com ~{C.RUA_CM} cm na régua)."
+    if cm < C.RUA_CM:
+        return f"🏠 <b>Sua rua: faltam ~{C.RUA_CM - cm:.0f} cm na régua</b> para a água começar a chegar."
+    lam = lamina_rua(cm)
+    meio = "acima do meio-fio" if cm >= C.RUA_MEIO_FIO_CM else "abaixo do meio-fio"
+    return f"🏠 <b>Sua rua: água estimada ~{lam:.0f} cm ({meio})</b> — estimativa ±10 cm."
 
 
 def cota_de_vazao(q):
@@ -252,9 +271,8 @@ def linha_gv(a):
         tend.append(f"{a['var24']:+.0f} cm em 24h")
     if tend:
         s += "\nTendência: " + " · ".join(tend)
-    s += f"\nReferências SGB: alerta 320 · inundação 360"
-    if C.RUA_CM:
-        s += f" · <b>sua rua ≈ {C.RUA_CM}</b> (faltam {C.RUA_CM - u['nivel_cm']:.0f} cm)"
+    s += "\nReferências SGB: alerta 320 · inundação 360"
+    s += "\n" + texto_rua(u["nivel_cm"])
     return s
 
 
@@ -282,7 +300,10 @@ def bloco_cenario(a):
     s = ["<b>Cenário indicativo 5 dias</b> (GloFAS corrigido; <i>experimental, ainda não validado</i>):"]
     for c in cen:
         d = fmt_d(c["data"])
-        s.append(f"• {d}: ~{c['central']:.0f} cm (pessimista {c['max']:.0f})")
+        extra = ""
+        if C.RUA_CM and c["max"] >= C.RUA_CM:
+            extra = f" → rua: até ~{lamina_rua(c['max']):.0f} cm no pessimista"
+        s.append(f"• {d}: ~{c['central']:.0f} cm (pessimista {c['max']:.0f}){extra}")
     return "\n".join(s)
 
 
@@ -362,8 +383,10 @@ def eventos(a, d, st):
     cen = a.get("cenario") or []
     pior = max((c["central"] for c in cen), default=0)
     hoje = a["t"].date().isoformat()
-    if pior >= C.GV["inundacao"] and st.get("cenario_alerta_dia") != hoje:
-        ev.append(f"🔮 Cenário central dos próximos 5 dias chega a ~{pior:.0f} cm (acima da inundação). "
+    lim = min(C.GV["inundacao"], C.RUA_CM or 10_000)
+    if pior >= lim and st.get("cenario_alerta_dia") != hoje:
+        ev.append(f"🔮 Cenário central dos próximos 5 dias chega a ~{pior:.0f} cm na régua "
+                  f"(água estimada ~{lamina_rua(pior):.0f} cm na sua rua). "
                   "Indicativo — confirme com SGB e Defesa Civil.")
         st["cenario_alerta_dia"] = hoje
     return ev

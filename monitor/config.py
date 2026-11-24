@@ -16,9 +16,17 @@ TZ = "America/Sao_Paulo"
 GV = {"cod": "56850000", "nome": "Governador Valadares", "lat": -18.8831, "lon": -41.9508,
       "alerta": 320, "inundacao": 360}
 
-# Cota (na régua de GV) em que a água chega na rua do usuário. Calibrar com o histórico
-# de cheias — ver README. Pode ser sobrescrita pela variável de ambiente RUA_CM.
-RUA_CM = int(os.environ["RUA_CM"]) if os.environ.get("RUA_CM", "").strip() else None
+# Calibração da rua do Eduardo (Esplanadinha), a partir do que ele observou:
+#   jan/2026 367 cm → água abaixo do meio-fio · jan/2025 376 cm → acima do meio-fio ·
+#   jan/2022 606 cm → ~1,3 m de água.
+# Ajuste linear: lâmina na rua (cm) ≈ 0,491 × (cota GV − 341). Erro esperado ±10 cm;
+# apenas 3 pontos, refinar a cada cheia observada.
+# RUA_CM = cota na régua de GV em que a água começa a chegar na rua. Pode ser
+# sobrescrita pela variável de repositório RUA_CM.
+RUA_CM = int(os.environ["RUA_CM"]) if os.environ.get("RUA_CM", "").strip() else 341
+RUA_FATOR = 0.491          # cm de água na rua por cm de régua em GV
+RUA_MEIO_FIO_CM = 372      # cota GV aproximada em que a água passa do meio-fio
+RUA_AVISO_ANTES_CM = 60    # começa a mostrar "faltam X cm" a partir de RUA_CM − 60
 
 # Postos a montante: código ANA, cotas SGB (quando o posto integra o SAH Doce) e
 # tempo médio de viagem da onda até Valadares (h).

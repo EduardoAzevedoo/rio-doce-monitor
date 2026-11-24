@@ -14,12 +14,18 @@ class TestLogica(unittest.TestCase):
         self.assertEqual(run.faixa(200), 0)
         self.assertEqual(run.faixa(255), 1)
         self.assertEqual(run.faixa(320), 2)
-        self.assertEqual(run.faixa(360), 3)
+        self.assertEqual(run.faixa(339), 2)
+        self.assertEqual(run.faixa(345), 4)   # rua calibrada em 341 cm vem antes da inundação oficial
 
     def test_histerese(self):
         self.assertEqual(run.faixa_com_histerese(315, 2), 2)   # 5 cm abaixo: segura
         self.assertEqual(run.faixa_com_histerese(309, 2), 1)   # 11 cm abaixo: desce
         self.assertEqual(run.faixa_com_histerese(330, 1), 2)   # sobe na hora
+
+    def test_lamina_rua_bate_observacoes(self):
+        self.assertLess(run.lamina_rua(367), 15)          # 2026: abaixo do meio-fio
+        self.assertGreater(run.lamina_rua(376), 15)       # 2025: acima do meio-fio
+        self.assertAlmostEqual(run.lamina_rua(606), 130, delta=10)  # 2022: ~1,3 m
 
     def test_subida_rapida(self):
         t0 = dt.datetime(2026, 1, 1, 12)

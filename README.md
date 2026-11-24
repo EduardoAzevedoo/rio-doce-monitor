@@ -46,7 +46,7 @@ Agente que checa o Rio Doce **de hora em hora** e manda pelo Telegram:
 3. **Secrets no GitHub:** neste repositório → *Settings → Secrets and variables → Actions → New repository secret*:
    - `TELEGRAM_BOT_TOKEN` = token do passo 1
    - `TELEGRAM_CHAT_ID` = número do passo 2
-4. **(Depois da calibração)** em *Variables*: `RUA_CM` = cota na régua de Valadares em que a água chega na sua rua.
+4. **Calibração da rua** (já feita, padrão no código): a água começa a chegar na rua com ~341 cm na régua de Valadares; lâmina ≈ 0,49 × (cota − 341) cm. Para ajustar sem mexer no código, crie em *Variables* `RUA_CM`.
 5. **Testar:** *Actions → Monitor Rio Doce → Run workflow*. O relatório chega no Telegram em ~1 min.
 
 ## Uso local
@@ -59,6 +59,6 @@ Sem dependências externas (só biblioteca padrão do Python 3.10+).
 
 ## Limites (leia)
 
-- A régua é a da estação de Valadares, não a sua rua. Até `RUA_CM` ser definido, o agente não sabe quando a água chega na Esplanadinha.
+- A régua é a da estação de Valadares. A tradução para a sua rua vem de 3 cheias observadas (2022: ~1,3 m a 606 cm; 2025: acima do meio-fio a 376 cm; 2026: abaixo do meio-fio a 367 cm) — erro esperado ±10 cm. Anote o que observar em cada cheia para refinar.
 - O cenário de 5 dias é indicativo: depende de chuva que ainda não caiu e ainda não foi validado contra cheias passadas.
 - O agente **complementa** a Defesa Civil (199) e o alerta por SMS (CEP para 40199). Não substitui.
