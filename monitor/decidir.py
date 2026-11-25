@@ -41,7 +41,10 @@ def decidir(evento: str) -> tuple[bool, str]:
 
 
 if __name__ == "__main__":
-    completo, motivo = decidir(os.environ.get("GITHUB_EVENT_NAME", "manual"))
+    evento = os.environ.get("GITHUB_EVENT_NAME", "manual")
+    if evento == "workflow_dispatch" and os.environ.get("AGENDADO", "").lower() == "true":
+        evento = "schedule"  # chamada do agendador externo: mesma regra da rodada agendada
+    completo, motivo = decidir(evento)
     print(f"completo={'true' if completo else 'false'} ({motivo})")
     out = os.environ.get("GITHUB_OUTPUT")
     if out:

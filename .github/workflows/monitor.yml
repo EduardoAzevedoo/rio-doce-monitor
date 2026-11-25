@@ -19,6 +19,10 @@ on:
         description: "Só enviar um ALERTA DE TESTE (para conferir o som com o celular no silencioso)"
         type: boolean
         default: false
+      agendado:
+        description: "Uso interno: chamada do agendador externo (cron-job.org), tratada como rodada agendada"
+        type: boolean
+        default: false
 
 concurrency:
   group: monitor-rio-doce
@@ -51,6 +55,8 @@ jobs:
       - name: Decidir rodada leve ou completa
         id: decidir
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.teste_alerta) }}
+        env:
+          AGENDADO: ${{ inputs.agendado }}
         run: python -m monitor.decidir
 
       - name: Instalar dependências
@@ -61,7 +67,7 @@ jobs:
         if: steps.decidir.outputs.completo == 'true'
         run: |
           python -m unittest -q
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.relatorio }}" = "true" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.relatorio }}" = "true" ] && [ "${{ inputs.agendado }}" != "true" ]; then
             python -m monitor.run --relatorio
           else
             python -m monitor.run

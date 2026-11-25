@@ -148,8 +148,9 @@ def registrar_previsao(pv, falhas):
         if novo:
             w.writerow(["emitida", "nivel_atual_cm", "horizonte_h", "valido_para", "p50_cm", "baixo_cm", "alto_cm", "status"])
         if not pv:
+            motivo = "; ".join(x for x in falhas if "previs" in x or "chuva" in x or "ANA Valadares" in x)
             w.writerow([agora().isoformat(timespec="minutes"), "", "", "", "", "", "",
-                        "indisponivel: " + "; ".join(x for x in falhas if "previs" in x or "chuva" in x)[:200]])
+                        "indisponivel: " + (motivo or "sem leituras de Valadares")[:200]])
             return
         for p in pv["prev"]:
             w.writerow([pv["emitida"].isoformat(timespec="minutes"), round(pv["h0"], 1), p["H"],
