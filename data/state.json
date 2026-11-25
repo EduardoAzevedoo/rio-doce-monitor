@@ -1,5 +1,5 @@
 {
-  "ultimo_log": "2026-11-25T07:15:00",
+  "ultimo_log": "2026-11-25T08:15:00",
   "faixa": 0,
   "montante": {
     "56661000": "ok",
@@ -11,9 +11,9 @@
   },
   "aviso_dado_velho": false,
   "relatorio_dia": "2026-11-25",
-  "ultima_execucao": "2026-11-25T08:14:29.366827",
-  "ultima_previsao": "2026-11-25T07:00:00",
-  "ultima_completa": "2026-11-25T08:14:29.366827",
+  "ultima_execucao": "2026-11-25T09:21:45.871308",
+  "ultima_previsao": "2026-11-25T08:00:00",
+  "ultima_completa": "2026-11-25T09:21:45.871308",
   "rua": {
     "estado": 0,
     "pico": 0,
