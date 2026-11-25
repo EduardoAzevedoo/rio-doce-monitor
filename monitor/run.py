@@ -188,18 +188,28 @@ def coletar(leve=False):
     t = agora()
     ini, fim = (t - dt.timedelta(days=3)).date(), t.date()
     falhas, dados = [], {}
-    try:
-        dados["gv"] = ana.fetch(C.GV["cod"], ini, fim)
-    except Exception as e:
-        falhas.append(f"ANA Valadares: {e}")
-        dados["gv"] = []
-    dados["montante"] = []
-    for p in C.MONTANTE:
-        try:
-            dados["montante"].append((p, ana.fetch(p["cod"], ini, fim)))
-        except Exception as e:
-            falhas.append(f"ANA {p['nome']}: {e}")
-            dados["montante"].append((p, []))
+    # Todos os postos em paralelo, com tempo limitado: com a ANA lenta, a coleta sequencial
+    # (7 postos × 3 tentativas × 120 s) estourava o limite do job (rodada de 25/11 11h).
+    from concurrent.futures import ThreadPoolExecutor, wait
+    postos = [("gv", C.GV)] + [(p["cod"], p) for p in C.MONTANTE]
+    ex = ThreadPoolExecutor(max_workers=len(postos))
+    futs = {k: ex.submit(ana.fetch, p["cod"], ini, fim, 2, 45) for k, p in postos}
+    wait(list(futs.values()), timeout=150)
+    ex.shutdown(wait=False, cancel_futures=True)
+    res = {}
+    for k, p in postos:
+        f = futs[k]
+        nome = "Valadares" if k == "gv" else p["nome"]
+        if not f.done():
+            falhas.append(f"ANA {nome}: sem resposta em 150 s")
+            res[k] = []
+        elif f.exception():
+            falhas.append(f"ANA {nome}: {f.exception()}")
+            res[k] = []
+        else:
+            res[k] = f.result()
+    dados["gv"] = res["gv"]
+    dados["montante"] = [(p, res[p["cod"]]) for p in C.MONTANTE]
     chuva_h = None
     if leve:
         dados.update({"chuva": None, "glofas": None, "previsao": None})
