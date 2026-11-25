@@ -542,6 +542,7 @@ def main(argv=None):
             if a["gv"]:
                 st["ultimo_log"] = max(r["t"] for r in d["gv"] if r["nivel_cm"] is not None).isoformat()
             if not args.leve:
+                st["previsao_falhas"] = 0 if d.get("previsao") else st.get("previsao_falhas", 0) + 1
                 pv = d.get("previsao")
                 if not (pv is not None and pv["emitida"].isoformat() == st.get("ultima_previsao")):
                     registrar_previsao(pv, d["falhas"])

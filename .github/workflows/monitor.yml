@@ -39,6 +39,7 @@ jobs:
       TZ: America/Sao_Paulo
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      HC_PING_URL: ${{ secrets.HC_PING_URL }}
       RUA_CM: ${{ vars.RUA_CM }}
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +50,12 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
+
+      - name: Sinal de vida — início
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.teste_alerta) }}
+        continue-on-error: true
+        run: |
+          [ -n "$HC_PING_URL" ] && curl -fsS -m 10 --retry 3 -o /dev/null "$HC_PING_URL/start" || true
 
       - name: Alerta de teste
         if: github.event_name == 'workflow_dispatch' && inputs.teste_alerta
@@ -78,6 +85,22 @@ jobs:
       - name: Rodar monitor (leve)
         if: steps.decidir.outputs.completo == 'false'
         run: python -m monitor.run --leve
+
+      - name: Sinal de vida — resultado
+        if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.teste_alerta) }}
+        continue-on-error: true
+        run: |
+          [ -z "$HC_PING_URL" ] && exit 0
+          if [ "${{ job.status }}" != "success" ]; then
+            motivo="execução do workflow falhou (status ${{ job.status }}, run ${{ github.run_id }})"
+            sufixo="/fail"
+          elif motivo=$(python -m monitor.saude); then
+            sufixo=""
+          else
+            sufixo="/fail"
+          fi
+          echo "$sufixo $motivo"
+          curl -fsS -m 10 --retry 3 -o /dev/null --data-raw "$motivo" "$HC_PING_URL$sufixo" || true
 
       - name: Salvar estado e leituras
         if: always()
