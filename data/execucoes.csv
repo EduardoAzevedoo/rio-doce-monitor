@@ -30,3 +30,4 @@
 2026-11-26T15:02:04,workflow_dispatch,agendado=true,run=45872384267,tentativa=1,decidir=success,completo=true,status_job=success
 2026-11-26T16:00:58,workflow_dispatch,agendado=true,run=45880300507,tentativa=1,decidir=success,completo=false,status_job=success
 2026-11-26T16:17:41,schedule,agendado=,run=45882513096,tentativa=1,decidir=success,completo=false,status_job=success
+2026-11-26T17:00:43,workflow_dispatch,agendado=true,run=45887790818,tentativa=1,decidir=success,completo=false,status_job=success
