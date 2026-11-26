@@ -147,3 +147,4 @@ emitida,nivel_atual_cm,horizonte_h,valido_para,p50_cm,baixo_cm,alto_cm,status
 2026-11-26T14:00,200.0,72,2026-11-29T14:00,242.2,202.6,260.0,ok
 2026-11-26T14:00,200.0,96,2026-11-30T14:00,236.6,201.2,257.4,ok
 2026-11-26T14:00,200.0,120,2026-12-01T14:00,221.0,186.6,230.8,ok
+2026-11-26T18:02,,,,,,,indisponivel: ANA Valadares: ANA 56850000: falha após 2 tentativas: The read operation timed out
