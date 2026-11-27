@@ -1,5 +1,5 @@
 {
-  "ultimo_log": "2026-11-27T09:15:00",
+  "ultimo_log": "2026-11-27T11:15:00",
   "faixa": 0,
   "montante": {
     "56661000": "ok",
@@ -9,15 +9,15 @@
     "56719998": "ok",
     "56846200": "ok"
   },
-  "aviso_dado_velho": true,
+  "aviso_dado_velho": false,
   "relatorio_dia": "2026-11-27",
-  "ultima_execucao": "2026-11-27T11:04:49.461222",
-  "ultima_previsao": "2026-11-27T08:00:00",
-  "ultima_completa": "2026-11-27T11:04:49.461222",
+  "ultima_execucao": "2026-11-27T12:00:55.696994",
+  "ultima_previsao": "2026-11-27T11:00:00",
+  "ultima_completa": "2026-11-27T12:00:55.696994",
   "rua": {
     "estado": 0,
     "pico": 0,
     "iminente": false
   },
-  "previsao_falhas": 1
+  "previsao_falhas": 0
 }
