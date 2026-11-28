@@ -238,3 +238,4 @@ emitida,nivel_atual_cm,horizonte_h,valido_para,p50_cm,baixo_cm,alto_cm,status
 2026-11-27T23:00,202.5,72,2026-11-30T23:00,199.4,182.9,217.4,ok
 2026-11-27T23:00,202.5,96,2026-12-01T23:00,190.4,170.8,214.8,ok
 2026-11-27T23:00,202.5,120,2026-12-02T23:00,183.8,166.5,216.1,ok
+2026-11-28T03:01,,,,,,,indisponivel: ANA Valadares: ANA 56850000: falha após 2 tentativas: HTTP Error 502: Bad Gateway

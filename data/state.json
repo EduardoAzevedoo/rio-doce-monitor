@@ -9,15 +9,15 @@
     "56719998": "ok",
     "56846200": "ok"
   },
-  "aviso_dado_velho": false,
+  "aviso_dado_velho": true,
   "relatorio_dia": "2026-11-27",
-  "ultima_execucao": "2026-11-28T02:00:33.379717",
+  "ultima_execucao": "2026-11-28T03:01:27.660953",
   "ultima_previsao": "2026-11-27T23:00:00",
-  "ultima_completa": "2026-11-28T00:00:41.819956",
+  "ultima_completa": "2026-11-28T03:01:27.660953",
   "rua": {
     "estado": 0,
     "pico": 0,
     "iminente": false
   },
-  "previsao_falhas": 0
+  "previsao_falhas": 1
 }
